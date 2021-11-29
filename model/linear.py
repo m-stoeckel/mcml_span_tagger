@@ -11,14 +11,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import wandb
-# from neptune_pytorch_lightning.impl import NeptuneLogger
 from pytorch_lightning.loggers import CometLogger, TestTubeLogger, WandbLogger
 from torch.utils.tensorboard import SummaryWriter
 from transformers import AutoConfig, AutoModel, PreTrainedModel
 
-from model.classifiers import LinearMultiHeadClassifier
-from utils.metrics import multi_label_span_classification_report
 from utils.label_decoder import LabelDecoder
+from utils.metrics import multi_label_span_classification_report
 
 nne_entities = ['ADDRESSNON', 'AGE', 'AIRPORT', 'ALBUM', 'ANIMATE', 'ARMY', 'ATTRACTION', 'AWARD', 'BAND', 'BOOK',
                 'BORDER',
@@ -80,7 +78,6 @@ class PoolingSpanClassificationModel(pl.LightningModule):
             momentum: float = 0.9,
             patience: int = 2,
             remedy_solution=False,
-            multi_head=False,
             use_cache=False,
             optimizer='adamw',
             feature_pooling='max',
@@ -137,8 +134,6 @@ class PoolingSpanClassificationModel(pl.LightningModule):
         elif self.reproject_lm in ('rnn', 'lstm', 'gru'):
             raise NotImplementedError("LSTM reprojection not implemented yet!")
 
-        self.classifier_cls = LinearMultiHeadClassifier if multi_head else nn.Linear
-
         if self.feature_pooling == 'cat' and self.single_classifier:
             raise ValueError("Cannot use single classifier with 'cat' feature aggregation!")
 
@@ -173,12 +168,12 @@ class PoolingSpanClassificationModel(pl.LightningModule):
 
         if self.feature_pooling == 'cat':
             self.classifiers = nn.ModuleList([
-                self.classifier_cls(classifier_input_dim * i, self.number_of_classes)
+                nn.Linear(classifier_input_dim * i, self.number_of_classes)
                 for i in range(1, self.max_span_length + int(not self.remedy_solution))
             ])
             if self.remedy_solution:
                 self.classifiers.append(
-                    self.classifier_cls(classifier_input_dim * self.max_span_length, self.number_of_classes * 2))
+                    nn.Linear(classifier_input_dim * self.max_span_length, self.number_of_classes * 2))
         else:
             if self.feature_pooling == 'exhaustive':
                 classifier_input_dim *= 3
@@ -187,13 +182,13 @@ class PoolingSpanClassificationModel(pl.LightningModule):
     def _init_samesize_classifier(self, classifier_input_dim):
         if not self.single_classifier:
             self.classifiers = nn.ModuleList([
-                self.classifier_cls(classifier_input_dim, self.number_of_classes)
+                nn.Linear(classifier_input_dim, self.number_of_classes)
                 for _ in range(1, self.max_span_length + int(not self.remedy_solution))
             ])
             if self.remedy_solution:
-                self.classifiers.append(self.classifier_cls(classifier_input_dim, self.number_of_classes * 2))
+                self.classifiers.append(nn.Linear(classifier_input_dim, self.number_of_classes * 2))
         else:
-            self.classifier = self.classifier_cls(classifier_input_dim, self.number_of_classes)
+            self.classifier = nn.Linear(classifier_input_dim, self.number_of_classes)
 
     @property
     def number_of_classes(self):
@@ -447,7 +442,8 @@ class PoolingSpanClassificationModel(pl.LightningModule):
         return torch.sum(torch.stack(loss_per_layer))
 
     def evaluate(self, input_ids, attention_mask, labels, context_mask, seq_length, pre_padding, word_index, **kwargs):
-        logits, context_mask = self(input_ids, attention_mask, context_mask, seq_length, pre_padding, word_index, **kwargs)
+        logits, context_mask = self(input_ids, attention_mask, context_mask, seq_length, pre_padding, word_index,
+                                    **kwargs)
         remedy_logits = None
 
         if self.remedy_solution and len(labels) >= self.max_span_length:
