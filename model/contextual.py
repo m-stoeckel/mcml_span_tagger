@@ -50,15 +50,9 @@ class ContextualRNNSpanClassificationModel(RNNSpanClassificationModel):
         if self.reproject_contextual_embeddings:
             document_features = self.reproject_contextual.forward(document_features.view(input_ids.shape[0], -1))
 
-        logits, remedy_logits = self(input_ids, attention_mask, context_mask, *_batch,
-                                     document_features=document_features)
+        logits = self(input_ids, attention_mask, context_mask, *_batch, document_features=document_features)
 
-        if self.remedy_solution and len(labels) >= self.max_span_length:
-            labels, remedy_labels = labels[:-1], labels[-1]
-        else:
-            remedy_labels = None
-
-        return self.compute_loss(logits, remedy_logits, labels, remedy_labels)
+        return self.compute_loss(logits, labels)
 
     def forward_classifier(self, layer_outputs: List[torch.Tensor], document_features: torch.Tensor = None, **kwargs):
         document_features = document_features.unsqueeze(1)

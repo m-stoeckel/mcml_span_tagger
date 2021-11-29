@@ -28,7 +28,6 @@ class MultiLabelSpanDataModule(pl.LightningDataModule):
             test_file: str = None,
             val_file: Optional[str] = None,
             max_span_length=8,
-            remedy_solution=False,
             batch_size: int = 64,
             shuffle_train: bool = False,
             use_cache: bool = True,
@@ -49,7 +48,6 @@ class MultiLabelSpanDataModule(pl.LightningDataModule):
         self.val_file = val_file
 
         self.max_span_length = max_span_length
-        self.remedy_solution = remedy_solution
         self.batch_size = batch_size
         self.shuffle = shuffle_train
         self.use_cache = use_cache
@@ -117,7 +115,6 @@ class MultiLabelSpanDataModule(pl.LightningDataModule):
             self.train_data = self.dataset_cls(
                 self.entity_lexicon,
                 max_span_length=self.max_span_length,
-                remedy_solution=self.remedy_solution,
                 pad_token=self.pad_token,
                 add_super_classes=self.add_super_classes,
                 **self.train_dataset
@@ -127,7 +124,6 @@ class MultiLabelSpanDataModule(pl.LightningDataModule):
                 self.val_data = self.dataset_cls(
                     self.entity_lexicon,
                     max_span_length=self.max_span_length,
-                    remedy_solution=self.remedy_solution,
                     pad_token=self.pad_token,
                     add_super_classes=self.add_super_classes,
                     **self.val_dataset
@@ -139,8 +135,7 @@ class MultiLabelSpanDataModule(pl.LightningDataModule):
         if stage == 'test' or stage is None:
             self.test_data = self.dataset_cls(
                 self.entity_lexicon,
-                max_span_length=max(99, self.max_span_length) if not self.remedy_solution else self.max_span_length,
-                remedy_solution=self.remedy_solution,
+                max_span_length=max(99, self.max_span_length),
                 pad_token=self.pad_token,
                 add_super_classes=self.add_super_classes,
                 **self.test_dataset
@@ -151,7 +146,6 @@ class MultiLabelSpanDataModule(pl.LightningDataModule):
             self.collate,
             num_classes=len(self.entity_lexicon),
             max_span_length=self.train_data.max_span_length,
-            remedy_solution=self.remedy_solution,
             pad_token_id=self.pad_token_id
         )
         return DataLoader(
@@ -164,7 +158,6 @@ class MultiLabelSpanDataModule(pl.LightningDataModule):
             self.collate,
             num_classes=len(self.entity_lexicon),
             max_span_length=self.val_data.max_span_length,
-            remedy_solution=self.remedy_solution,
             pad_token_id=self.pad_token_id
         )
         return DataLoader(
@@ -176,7 +169,6 @@ class MultiLabelSpanDataModule(pl.LightningDataModule):
             self.collate,
             num_classes=len(self.entity_lexicon),
             max_span_length=self.test_data.max_span_length,
-            remedy_solution=self.remedy_solution,
             pad_token_id=self.pad_token_id
         )
         return DataLoader(
@@ -187,7 +179,7 @@ class MultiLabelSpanDataModule(pl.LightningDataModule):
         return collate(batch, **kwargs)
 
 
-def collate(batch, num_classes=None, max_span_length=None, remedy_solution=False, pad_token_id=0):
+def collate(batch, num_classes=None, max_span_length=None, pad_token_id=0):
     r"""Puts each data field into a tensor with outer dimension batch size"""
     batch = {key: [d[key] for d in batch] for key in batch[0].keys()}
 
@@ -211,9 +203,7 @@ def collate(batch, num_classes=None, max_span_length=None, remedy_solution=False
             if len(labels) > layer:
                 batch_labels[layer].append(labels[layer].transpose(1, 0))
             else:
-                remedy_multiplier = 1 + int(remedy_solution and layer == max_span_length - 1)
-                layer_size = num_classes * remedy_multiplier
-                batch_labels[layer].append(torch.empty((layer_size, 0)))
+                batch_labels[layer].append(torch.empty((num_classes, 0)))
 
     batch['labels'] = [
         pad_and_stack_tensors(labels, 0).transpose(2, 1) for labels in batch_labels

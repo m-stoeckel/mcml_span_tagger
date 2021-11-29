@@ -77,7 +77,6 @@ class PoolingSpanClassificationModel(pl.LightningModule):
             lr: float = 1e-3,
             momentum: float = 0.9,
             patience: int = 2,
-            remedy_solution=False,
             use_cache=False,
             optimizer='adamw',
             feature_pooling='max',
@@ -86,16 +85,14 @@ class PoolingSpanClassificationModel(pl.LightningModule):
             subword_pooling=True
     ):
         super().__init__()
+        self.entities_lexicon = entities_lexicon
         if entities_lexicon is None:
             self.entities_lexicon = nne_entities
-        else:
-            self.entities_lexicon = entities_lexicon
         self.max_span_length = max_span_length
         self.dropout = dropout
         self.lr = lr
         self.momentum = momentum
         self.patience = patience
-        self.remedy_solution = remedy_solution
         self.optimizer = optimizer
         self.feature_pooling = feature_pooling.lower()
         self.single_classifier = single_classifier
@@ -169,11 +166,8 @@ class PoolingSpanClassificationModel(pl.LightningModule):
         if self.feature_pooling == 'cat':
             self.classifiers = nn.ModuleList([
                 nn.Linear(classifier_input_dim * i, self.number_of_classes)
-                for i in range(1, self.max_span_length + int(not self.remedy_solution))
+                for i in range(1, self.max_span_length + 1)
             ])
-            if self.remedy_solution:
-                self.classifiers.append(
-                    nn.Linear(classifier_input_dim * self.max_span_length, self.number_of_classes * 2))
         else:
             if self.feature_pooling == 'exhaustive':
                 classifier_input_dim *= 3
@@ -183,10 +177,8 @@ class PoolingSpanClassificationModel(pl.LightningModule):
         if not self.single_classifier:
             self.classifiers = nn.ModuleList([
                 nn.Linear(classifier_input_dim, self.number_of_classes)
-                for _ in range(1, self.max_span_length + int(not self.remedy_solution))
+                for _ in range(1, self.max_span_length + 1)
             ])
-            if self.remedy_solution:
-                self.classifiers.append(nn.Linear(classifier_input_dim, self.number_of_classes * 2))
         else:
             self.classifier = nn.Linear(classifier_input_dim, self.number_of_classes)
 
@@ -281,12 +273,6 @@ class PoolingSpanClassificationModel(pl.LightningModule):
         input_ids, attention_mask, labels, context_mask, seq_length, pre_padding, word_index = unwrap_batch(batch)
 
         logits, context_mask = self(input_ids, attention_mask, context_mask, seq_length, pre_padding, word_index)
-        remedy_logits = None
-
-        if self.remedy_solution and len(labels) >= self.max_span_length:
-            labels, remedy_labels = labels[:-1], labels[-1]
-        else:
-            remedy_labels = None
 
         # BUG: Find the cause of this! -> I think I found it!
         # Happend with single item batches with sequences shorter than 2, because of a runaway seq_len - 2
@@ -307,7 +293,7 @@ class PoolingSpanClassificationModel(pl.LightningModule):
             raise RuntimeError(f"Broken batch found! len(logits): {len(logits)} len(labels): {len(labels)}! "
                                f"Saved batch to {batch_file.absolute()}")
 
-        return self.compute_loss(logits, remedy_logits, labels, remedy_labels)
+        return self.compute_loss(logits, labels)
 
     def training_step_end(self, loss):
         self.log("train/loss", loss, logger=True, prog_bar=False)
@@ -428,14 +414,12 @@ class PoolingSpanClassificationModel(pl.LightningModule):
             classifier_outputs.append(classifier.forward(layer_output))
         return classifier_outputs
 
-    def compute_loss(self, logits, remedy_logits, labels, remedy_labels, return_loss_per_layer=False):
+    def compute_loss(self, logits, labels, return_loss_per_layer=False):
         bce_loss = nn.BCEWithLogitsLoss(reduction=self.loss_reduction)
-        loss_per_layer = []
-        for layer_logits, layer_labels in zip(logits, labels):
-            loss_per_layer.append(bce_loss(layer_logits, layer_labels))
-
-        if self.remedy_solution and remedy_labels is not None and remedy_logits is not None:
-            loss_per_layer.append(bce_loss(remedy_logits, remedy_labels))
+        loss_per_layer = [
+            bce_loss(layer_logits, layer_labels)
+            for layer_logits, layer_labels in zip(logits, labels)
+        ]
 
         if return_loss_per_layer:
             return torch.sum(torch.stack(loss_per_layer)), loss_per_layer
@@ -444,35 +428,20 @@ class PoolingSpanClassificationModel(pl.LightningModule):
     def evaluate(self, input_ids, attention_mask, labels, context_mask, seq_length, pre_padding, word_index, **kwargs):
         logits, context_mask = self(input_ids, attention_mask, context_mask, seq_length, pre_padding, word_index,
                                     **kwargs)
-        remedy_logits = None
-
-        if self.remedy_solution and len(labels) >= self.max_span_length:
-            labels, remedy_labels = labels[:-1], labels[-1]
-        else:
-            remedy_labels = None
-
-        loss, loss_per_layer = self.compute_loss(logits, remedy_logits, labels, remedy_labels, True)
-        preds, labels, remedy_labels, remedy_preds = self.collect_preds(logits, labels, remedy_logits, remedy_labels)
+        loss, loss_per_layer = self.compute_loss(logits, labels, True)
+        preds, labels = self.collect_preds(logits, labels)
         return {
             'loss': loss.detach(),
             'loss_per_layer': [layer_loss.detach() for layer_loss in loss_per_layer],
             'preds': preds,
             'labels': labels,
-            'masks': to_numpy(context_mask),
-            'remedy_preds': remedy_preds,
-            'remedy_labels': remedy_labels
+            'masks': to_numpy(context_mask)
         }
 
-    def collect_preds(self, logits, labels, remedy_logits, remedy_labels):
+    def collect_preds(self, logits, labels):
         preds = [to_numpy(torch.round(torch.sigmoid(l))) for l in logits]
         labels = [to_numpy(l) for l in labels]
-        if remedy_logits is not None:
-            remedy_preds = to_numpy(torch.round(torch.sigmoid(remedy_logits)))
-        else:
-            remedy_preds = None
-        if remedy_labels is not None:
-            remedy_labels = to_numpy(remedy_labels)
-        return preds, labels, remedy_labels, remedy_preds
+        return preds, labels
 
     def evaluate_epoch(self, epoch_step_outputs, split) -> Tuple[dict, List[dict]]:
         pred = []
@@ -482,10 +451,6 @@ class PoolingSpanClassificationModel(pl.LightningModule):
         for step_outputs in epoch_step_outputs:
             _pred = self.decoder.decode(step_outputs['preds'], step_outputs['masks'])
             _true = self.decoder.decode(step_outputs['labels'], step_outputs['masks'])
-
-            if self.remedy_solution:
-                _pred += self.decoder.decode_remedy(step_outputs['remedy_preds'])
-                _true += self.decoder.decode_remedy(step_outputs['remedy_labels'])
 
             self.layer_wise_classes(_pred, layer_wise_pred)
             self.layer_wise_classes(_true, layer_wise_true)

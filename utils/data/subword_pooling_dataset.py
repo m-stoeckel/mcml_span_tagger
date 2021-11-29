@@ -52,26 +52,21 @@ class SubwordPoolingDataset(SpanDataset):
     def get_label_layers(self, idx, tokenized_seq_len, token_offset=0):
         label_layers = []
         num_classes = len(self.class_list)
-        for l in range(min(tokenized_seq_len, self.max_span_length - int(self.remedy_solution))):
+        for l in range(min(tokenized_seq_len, self.max_span_length)):
             n_spans_in_layer = tokenized_seq_len - l
             labels = torch.zeros((n_spans_in_layer, num_classes), requires_grad=False)
             label_layers.append(labels)
-
-        if self.remedy_solution and tokenized_seq_len >= self.max_span_length:
-            n_spans_in_layer = 1 + tokenized_seq_len - self.max_span_length
-            label_layers.append(torch.zeros((n_spans_in_layer, num_classes * 2), requires_grad=False))
 
         for entity in self.entities[idx]:
             start, end = entity['span']
             entity_type = entity['entity_type']
 
-            entity_length = abs(end - start)
-            layer_index = entity_length - 1
+            layer_index = abs(end - start) - 1
 
-            self.add_entity(label_layers, entity_type, layer_index, start, entity_length)
+            self.add_entity(label_layers, entity_type, layer_index, start)
 
             if self.add_super_classes and (entity_type := SUBSTITUTION_RULES.get(entity_type.upper())) is not None:
-                self.add_entity(label_layers, entity_type, layer_index, start, entity_length)
+                self.add_entity(label_layers, entity_type, layer_index, start)
 
         return label_layers
 
@@ -88,7 +83,6 @@ class TokenWindowSpanDataset(SubwordPoolingDataset):
             window_size=64,
             pad_token='PAD',
             max_span_length=8,
-            remedy_solution=False,
             **kwargs
     ):
         self.sequence_to_document = sequence_to_document
@@ -101,7 +95,6 @@ class TokenWindowSpanDataset(SubwordPoolingDataset):
             batch_encoding,
             pad_token,
             max_span_length,
-            remedy_solution,
             **kwargs
         )
 

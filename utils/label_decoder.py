@@ -34,6 +34,7 @@ class LabelDecoder:
         return decoded_layer
 
     def decode_remedy(self, y_remedy):
+        """Deprecated and up for removal."""
         longest_span = 0
         sequences_tags = []
         for sequence in y_remedy:

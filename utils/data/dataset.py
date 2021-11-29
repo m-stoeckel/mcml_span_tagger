@@ -137,14 +137,12 @@ class SpanDataset(Dataset):
             batch_encoding: BatchEncoding = None,
             pad_token='PAD',
             max_span_length=8,
-            remedy_solution=False,
             add_super_classes=False
     ):
         super(SpanDataset, self).__init__()
         self.class_list = class_list
         self.pad_token = pad_token
         self.max_span_length = max_span_length
-        self.remedy_solution = remedy_solution
 
         self.entities = entities
         self.sequences = sequences
@@ -167,14 +165,10 @@ class SpanDataset(Dataset):
     def get_label_layers(self, idx, tokenized_seq_len, token_offset=0):
         label_layers = []
         num_classes = len(self.class_list)
-        for l in range(min(tokenized_seq_len, self.max_span_length - int(self.remedy_solution))):
+        for l in range(min(tokenized_seq_len, self.max_span_length)):
             n_spans_in_layer = tokenized_seq_len - l
             labels = torch.zeros((n_spans_in_layer, num_classes), requires_grad=False)
             label_layers.append(labels)
-
-        if self.remedy_solution and tokenized_seq_len >= self.max_span_length:
-            n_spans_in_layer = 1 + tokenized_seq_len - self.max_span_length
-            label_layers.append(torch.zeros((n_spans_in_layer, num_classes * 2), requires_grad=False))
 
         word_ids = self.batch_encoding.word_ids(idx)
         min_token_index, max_token_index = self.get_min_max_indices(word_ids)
@@ -185,23 +179,17 @@ class SpanDataset(Dataset):
             start_token_index = min_token_index[start] - 1 + token_offset
             end_token_index = max_token_index[end - 1] + token_offset
 
-            entity_length = abs(end_token_index - start_token_index)
-            layer_index = entity_length - 1
+            layer_index = abs(end_token_index - start_token_index) - 1
 
-            self.add_entity(label_layers, entity_type, layer_index, start_token_index, entity_length)
+            self.add_entity(label_layers, entity_type, layer_index, start_token_index)
 
             if self.add_super_classes and (entity_type := SUBSTITUTION_RULES.get(entity_type.upper())) is not None:
-                self.add_entity(label_layers, entity_type, layer_index, start_token_index, entity_length)
+                self.add_entity(label_layers, entity_type, layer_index, start_token_index)
 
         return label_layers
 
-    def add_entity(self, label_layers, entity_type, layer_index, start_token_index, entity_length):
-        if self.remedy_solution and entity_length >= self.max_span_length:
-            class_span_begin_index = self.class_list.index(entity_type) * 2
-            label_layers[-1][start_token_index][class_span_begin_index] = 1
-            for offset in range(entity_length - self.max_span_length):
-                label_layers[-1][start_token_index + offset][class_span_begin_index + 1] = 1
-        elif layer_index < self.max_span_length:
+    def add_entity(self, label_layers, entity_type, layer_index, start_token_index):
+        if layer_index < self.max_span_length:
             label_layers[layer_index][start_token_index][self.class_list.index(entity_type)] = 1
 
     def __getitem__(self, i) -> Dict[str, Union[torch.Tensor, Any]]:

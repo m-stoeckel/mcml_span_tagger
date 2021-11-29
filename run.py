@@ -34,7 +34,6 @@ def get_parser():
     add_boolean_argument(parser, 'use_cache', False)
 
     parser.add_argument('--subword_pooling', choices=('none', 'first'), default='first')
-    add_boolean_argument(parser, 'remedy_solution', False)
 
     add_choice_argument(parser, 'dataset', ('base', 'TokenWindow'), 'base')
     parser.add_argument('--token_window', '--token-window', type=int, default=64)
@@ -108,7 +107,6 @@ def get_args():
     # Post-correct arguments
     args.use_cache = args.use_cache and not args.lm_finetune and not args.shuffle_train
     args.dataset = 'base' if args.variant == 'rnn_tfidf' else args.dataset
-    args.remedy_solution = False if args.single_classifier else args.remedy_solution
 
     return args
 
@@ -120,7 +118,6 @@ if __name__ == '__main__':
     # Post-correct arguments
     args.use_cache = args.use_cache and not args.lm_finetune and not args.shuffle_train
     args.dataset = 'base' if args.variant == 'rnn_tfidf' else args.dataset
-    args.remedy_solution = False if args.single_classifier else args.remedy_solution
 
     # Pyramidal model require same size input from LM and lower layers
     if args.variant in ('rnn_pyramid', 'rnn_passpyr', 'rnn_exhpyr', 'rnn_pyramid_local'):
@@ -227,7 +224,6 @@ if __name__ == '__main__':
                 max_span_length=args.max_span_length,
                 batch_size=args.batch_size,
                 num_workers=args.num_workers,
-                remedy_solution=args.remedy_solution,
                 shuffle_train=args.shuffle_train,
                 add_super_classes=args.add_super_classes,
                 subword_pooling=args.subword_pooling,
@@ -242,7 +238,6 @@ if __name__ == '__main__':
                 max_span_length=args.max_span_length,
                 batch_size=args.batch_size,
                 num_workers=args.num_workers,
-                remedy_solution=args.remedy_solution,
                 shuffle_train=args.shuffle_train,
                 add_super_classes=args.add_super_classes,
                 subword_pooling=args.subword_pooling,
@@ -260,7 +255,6 @@ if __name__ == '__main__':
                 max_span_length=args.max_span_length,
                 batch_size=args.batch_size,
                 num_workers=args.num_workers,
-                remedy_solution=args.remedy_solution,
                 shuffle_train=args.shuffle_train,
                 add_super_classes=args.add_super_classes,
                 subword_pooling=args.subword_pooling,
@@ -275,7 +269,6 @@ if __name__ == '__main__':
             max_span_length=args.max_span_length,
             batch_size=args.batch_size,
             num_workers=args.num_workers,
-            remedy_solution=args.remedy_solution,
             shuffle_train=args.shuffle_train,
             add_super_classes=args.add_super_classes,
             subword_pooling=args.subword_pooling,
@@ -351,7 +344,6 @@ if __name__ == '__main__':
         momentum=args.momentum,
         patience=args.patience,
         max_span_length=args.max_span_length,
-        remedy_solution=args.remedy_solution,
         optimizer=args.optimizer,
         feature_pooling=args.feature_pooling,
         single_classifier=args.single_classifier,
