@@ -18,21 +18,20 @@ from transformers import AutoConfig, AutoModel, PreTrainedModel
 from utils.label_decoder import LabelDecoder
 from utils.metrics import multi_label_span_classification_report
 
-nne_entities = ['ADDRESSNON', 'AGE', 'AIRPORT', 'ALBUM', 'ANIMATE', 'ARMY', 'ATTRACTION', 'AWARD', 'BAND', 'BOOK',
-                'BORDER',
-                'BRIDGE', 'BUILDING', 'CARDINAL', 'CHANNEL', 'CHEMICAL', 'CITY', 'CITYSTATE', 'CONCERT', 'CONTINENT',
-                'CORPJARGON', 'COUNTRY', 'DATE', 'DATEOTHER', 'DAY', 'DISEASE', 'DURATION', 'ELECTRONICS', 'ENERGY',
-                'EVENT', 'FACILITY', 'FILM', 'FIRST', 'FOLD', 'FUND', 'GOD', 'GOVERNMENT', 'GPE', 'GRPLOC', 'GRPORG',
-                'GRPPER', 'HON', 'HOSPITAL', 'HOTEL', 'HURRICANE', 'INDEX', 'INI', 'IPOINTS', 'LANGUAGE', 'LAW',
-                'LOCATIONOTHER', 'MEDIA', 'MIDDLE', 'MONEY', 'MONTH', 'MULT', 'MUSEUM', 'NAME', 'NAMEMOD',
-                'NATIONALITY',
-                'NATURALDISASTER', 'NICKNAME', 'NORPOTHER', 'NORPPOLITICAL', 'NUMDAY', 'OCEAN', 'ORDINAL', 'ORGCORP',
-                'ORGEDU', 'ORGOTHER', 'ORGPOLITICAL', 'ORGRELIGIOUS', 'PAINTING', 'PER', 'PERCENT', 'PERIODIC', 'PLAY',
-                'PRODUCTDRUG', 'PRODUCTFOOD', 'PRODUCTOTHER', 'QUAL', 'QUANTITY1D', 'QUANTITY2D', 'QUANTITY3D',
-                'QUANTITYOTHER', 'RATE', 'REGION', 'REL', 'RELIGION', 'RIVER', 'ROLE', 'SCINAME', 'SEASON', 'SONG',
-                'SPACE',
-                'SPEED', 'SPORTSEVENT', 'SPORTSSEASON', 'SPORTSTEAM', 'STADIUM', 'STATE', 'STATION', 'STREET', 'SUBURB',
-                'TEMPERATURE', 'TIME', 'TVSHOW', 'UNIT', 'VEHICLE', 'WAR', 'WEAPON', 'WEIGHT', 'WOA', 'YEAR']
+nne_entities = [
+    'ADDRESSNON', 'AGE', 'AIRPORT', 'ALBUM', 'ANIMATE', 'ARMY', 'ATTRACTION', 'AWARD', 'BAND', 'BOOK', 'BORDER',
+    'BRIDGE', 'BUILDING', 'CARDINAL', 'CHANNEL', 'CHEMICAL', 'CITY', 'CITYSTATE', 'CONCERT', 'CONTINENT',
+    'CORPJARGON', 'COUNTRY', 'DATE', 'DATEOTHER', 'DAY', 'DISEASE', 'DURATION', 'ELECTRONICS', 'ENERGY',
+    'EVENT', 'FACILITY', 'FILM', 'FIRST', 'FOLD', 'FUND', 'GOD', 'GOVERNMENT', 'GPE', 'GRPLOC', 'GRPORG',
+    'GRPPER', 'HON', 'HOSPITAL', 'HOTEL', 'HURRICANE', 'INDEX', 'INI', 'IPOINTS', 'LANGUAGE', 'LAW',
+    'LOCATIONOTHER', 'MEDIA', 'MIDDLE', 'MONEY', 'MONTH', 'MULT', 'MUSEUM', 'NAME', 'NAMEMOD', 'NATIONALITY',
+    'NATURALDISASTER', 'NICKNAME', 'NORPOTHER', 'NORPPOLITICAL', 'NUMDAY', 'OCEAN', 'ORDINAL', 'ORGCORP',
+    'ORGEDU', 'ORGOTHER', 'ORGPOLITICAL', 'ORGRELIGIOUS', 'PAINTING', 'PER', 'PERCENT', 'PERIODIC', 'PLAY',
+    'PRODUCTDRUG', 'PRODUCTFOOD', 'PRODUCTOTHER', 'QUAL', 'QUANTITY1D', 'QUANTITY2D', 'QUANTITY3D',
+    'QUANTITYOTHER', 'RATE', 'REGION', 'REL', 'RELIGION', 'RIVER', 'ROLE', 'SCINAME', 'SEASON', 'SONG', 'SPACE',
+    'SPEED', 'SPORTSEVENT', 'SPORTSSEASON', 'SPORTSTEAM', 'STADIUM', 'STATE', 'STATION', 'STREET', 'SUBURB',
+    'TEMPERATURE', 'TIME', 'TVSHOW', 'UNIT', 'VEHICLE', 'WAR', 'WEAPON', 'WEIGHT', 'WOA', 'YEAR'
+]
 
 genia_entities = [
     'G#DNA',
@@ -360,7 +359,7 @@ class PoolingSpanClassificationModel(pl.LightningModule):
 
         # If self.reproject_lm, shape changes to: (batch_size, seq_len, reproject_lm_dim)
         if self.reproject_lm:
-            sequence_output = F.relu(self.reproject(sequence_output))
+            sequence_output = torch.relu(self.reproject(sequence_output))
 
         if self.subword_pooling:
             sequence_output = [
@@ -402,7 +401,7 @@ class PoolingSpanClassificationModel(pl.LightningModule):
             layer_output: torch.Tensor = sequence_output.unfold(1, span_length, 1)
 
             layer_output = self.aggregate_features(layer_output, self.feature_pooling)
-            layer_output = F.relu(layer_output)
+            layer_output = torch.relu(layer_output)
 
             layer_outputs.append(layer_output)
         return layer_outputs
