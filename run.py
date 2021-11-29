@@ -157,8 +157,6 @@ if __name__ == '__main__':
     from model.recurrent import ExhaustivePyramidalModel, ExhaustiveRegionClassificationModel, \
         HierarchicalRNNSpanClassificationModel, \
         LocalizedPyramidModel, PassThroughPyramidModel, PyramidModel, RNNSpanClassificationModel
-    from model.separate_optim import PoolingSpanClassificationModelSep, \
-        PoolingSpanClassificationModelSepAuto
 
     non_default_values = [
         "_".join((key, str(value)))
@@ -314,26 +312,16 @@ if __name__ == '__main__':
             stochastic_weight_avg=args.stochastic_weight_avg,
         )
     else:  # args.variant == 'multi_linear':
-        if not args.optimize_separately:
-            tagger_cls = PoolingSpanClassificationModel
-            trainer_cls = partial(
-                pl.Trainer,
-                gradient_clip_algorithm=args.gradient_clip_algorithm,
-                gradient_clip_val=args.gradient_clip_val,
-                stochastic_weight_avg=args.stochastic_weight_avg,
-            )
-        else:
-            tagger_cls = PoolingSpanClassificationModelSep if not args.force_auto_opt else PoolingSpanClassificationModelSepAuto
-            tagger_cls = partial(
-                tagger_cls,
-                gradient_clip_algorithm=args.gradient_clip_algorithm,
-                gradient_clip_val=args.gradient_clip_val,
-            )
-            trainer_cls = pl.Trainer
+        tagger_cls = PoolingSpanClassificationModel
+        trainer_cls = partial(
+            pl.Trainer,
+            gradient_clip_algorithm=args.gradient_clip_algorithm,
+            gradient_clip_val=args.gradient_clip_val,
+            stochastic_weight_avg=args.stochastic_weight_avg,
+        )
 
     tagger: Union[
-        HierarchicalRNNSpanClassificationModel, RNNSpanClassificationModel,
-        PoolingSpanClassificationModel, PoolingSpanClassificationModelSep, PoolingSpanClassificationModelSepAuto
+        HierarchicalRNNSpanClassificationModel, RNNSpanClassificationModel, PoolingSpanClassificationModel
     ] = tagger_cls(
         language_model=args.language_model,
         entities_lexicon=entities,
